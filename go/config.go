@@ -185,7 +185,7 @@ func (c *Config) SetDB(o string) {
 
 // SetDB is a setter of DB.
 func (c *Config) SetDataSource(o string) {
-	c.values.Set("dataSource", o)
+	c.values.Set("datasource", o)
 }
 
 // GetDB is getter of DB.
@@ -198,7 +198,7 @@ func (c *Config) GetDB() string {
 
 // GetDataSource is getter of data source.
 func (c *Config) GetDataSource() string {
-	if val := c.values.Get("dataSource"); val != "" {
+	if val := c.values.Get("datasource"); val != "" {
 		return val
 	}
 	return DefaultDataSource
