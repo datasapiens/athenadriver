@@ -183,12 +183,25 @@ func (c *Config) SetDB(o string) {
 	c.values.Set("db", o)
 }
 
+// SetDB is a setter of DB.
+func (c *Config) SetDataSource(o string) {
+	c.values.Set("dataSource", o)
+}
+
 // GetDB is getter of DB.
 func (c *Config) GetDB() string {
 	if val := c.values.Get("db"); val != "" {
 		return val
 	}
 	return DefaultDBName
+}
+
+// GetDataSource is getter of data source.
+func (c *Config) GetDataSource() string {
+	if val := c.values.Get("dataSource"); val != "" {
+		return val
+	}
+	return DefaultDataSource
 }
 
 // SetWorkGroup is a setter of WorkGroup.
