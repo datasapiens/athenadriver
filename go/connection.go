@@ -339,6 +339,7 @@ func (c *Connection) QueryContext(ctx context.Context, query string, namedArgs [
 		QueryString: aws.String(query),
 		QueryExecutionContext: &athena.QueryExecutionContext{
 			Database: aws.String(c.connector.config.GetDB()),
+			Catalog:  aws.String(c.connector.config.GetDataSource()),
 		},
 		ResultConfiguration: &athena.ResultConfiguration{
 			OutputLocation: aws.String(c.connector.config.GetOutputBucket()),

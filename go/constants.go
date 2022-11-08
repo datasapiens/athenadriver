@@ -39,6 +39,9 @@ const (
 	// DefaultRegion is the default region in Athena.
 	DefaultRegion = "us-east-1"
 
+	// DefaultDataSource is the default data source in Athena.
+	DefaultDataSource = "AwsDataCatalog"
+
 	// TimestampUniXFormat is from https://docs.aws.amazon.com/athena/latest/ug/data-types.html.
 	// https://stackoverflow.com/questions/20530327/origin-of-mon-jan-2-150405-mst-2006-in-golang
 	// RFC3339 is not supported by AWS Athena. It uses session timezone!.
