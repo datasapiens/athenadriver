@@ -32,10 +32,13 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/service/athena/athenaiface"
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/athena"
 )
+
+var jcf = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Rows defines rows in AWS Athena ResultSet.
 type Rows struct {
@@ -330,7 +333,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 	// we assume the json syntax is correct. Leave to caller to verify it.
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown":
+		"ipaddress", "map", "unknown":
 		return val, nil
 	case "boolean":
 		if val == "true" {
@@ -352,6 +355,15 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 			return nil, err
 		}
 		return vv.Time, err
+	case "array":
+		iter := jcf.BorrowIterator([]byte([]byte(val)))
+		defer jcf.ReturnIterator(iter)
+		var result []interface{}
+		iter.ReadVal(&result)
+		if iter.Error != nil {
+			return nil, fmt.Errorf("cannor unmarshal array values")
+		}
+		return result, nil
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", *columnInfo.Type))
@@ -373,8 +385,10 @@ func (r *Rows) getDefaultValueForColumnType(athenaType string) interface{} {
 		return time.Time{}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown":
+		"ipaddress", "map", "unknown":
 		return ""
+	case "array":
+		return []interface{}{}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))

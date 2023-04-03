@@ -254,7 +254,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 		}
 		for _, v := range []string{"json", "char", "varchar", "varbinary", "row", "string", "binary",
 			"struct", "interval year to month", "interval day to second", "decimal",
-			"ipaddress", "array", "map", "unknown"} {
+			"ipaddress", "map", "unknown"} {
 			assert.Equal(t, r.getDefaultValueForColumnType(v), "")
 		}
 		for _, v := range []string{"float", "double", "real"} {
@@ -263,6 +263,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 		for _, v := range []string{"date", "time", "time with time zone", "timestamp", "timestamp with time zone"} {
 			assert.Equal(t, r.getDefaultValueForColumnType(v), time.Time{})
 		}
+		assert.Equal(t, r.getDefaultValueForColumnType("array"), []interface{}{})
 		assert.Equal(t, r.getDefaultValueForColumnType("boolean"), false)
 		assert.Equal(t, r.getDefaultValueForColumnType("XXX"), "")
 	}
