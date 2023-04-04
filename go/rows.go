@@ -132,6 +132,7 @@ func (r *Rows) Next(dest []driver.Value) error {
 	// Shift to next row
 	cur := r.ResultOutput.ResultSet.Rows[0]
 	columns := r.ResultOutput.ResultSet.ResultSetMetadata.ColumnInfo
+	r.columnType = make([]reflect.Type, len(columns))
 	if err := r.convertRow(columns, cur.Data, dest, r.config); err != nil {
 		return err
 	}
@@ -231,7 +232,6 @@ func (r *Rows) fetchNextPage(token *string) error {
 	}
 
 	r.ResultOutput.ResultSet.Rows = r.ResultOutput.ResultSet.Rows[rowOffset:]
-	r.columnType = make([]reflect.Type, 0, len(r.ResultOutput.ResultSet.Rows))
 	return nil
 }
 
@@ -264,7 +264,7 @@ func (r *Rows) convertRow(columns []*athena.ColumnInfo, rdata []*athena.Datum, r
 			zap.String("str", *val.VarCharValue),
 		)*/
 		ret[i] = value
-		r.columnType = append(r.columnType, columnType)
+		r.columnType[i] = columnType
 	}
 	return nil
 }
