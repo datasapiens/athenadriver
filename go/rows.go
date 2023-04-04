@@ -253,6 +253,7 @@ func (r *Rows) convertRow(columns []*athena.ColumnInfo, rdata []*athena.Datum, r
 			return ErrAthenaNilDatum
 		}
 		value, err := r.athenaTypeToGoType(columns[i], val.VarCharValue, driverConfig)
+		fmt.Println("convertRow ", value)
 		if err != nil {
 			r.tracer.Log(ErrorLevel, "convertrow failed", zap.String("error", err.Error()))
 			r.tracer.Scope().Counter(DriverName + ".failure.convertrow").Inc(1)
@@ -363,6 +364,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 		}
 		return vv.Time, err
 	case "array":
+		fmt.Println("1111 ", val)
 		iter := jcf.BorrowIterator([]byte(val))
 		defer jcf.ReturnIterator(iter)
 		var result []interface{}
@@ -370,6 +372,10 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 		if iter.Error != nil {
 			return []interface{}{val}, nil
 		} else {
+			fmt.Println("len ", len(result))
+			for _, r := range result {
+				fmt.Printf("%v , %T \n", r, r)
+			}
 			return result, nil
 		}
 	default:
