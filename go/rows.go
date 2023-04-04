@@ -25,6 +25,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,7 @@ type Rows struct {
 	queryID         string
 	reachedLastPage bool
 	ResultOutput    *athena.GetQueryResultsOutput
+	columnType      []reflect.Type
 	config          *Config
 	tracer          *DriverTracer
 	pageCount       int64
@@ -101,6 +103,10 @@ func (r *Rows) ColumnTypeDatabaseTypeName(index int) string {
 	r.tracer.Scope().Counter(DriverName + ".failure.columntypedatabasetypename").Inc(1)
 	r.tracer.Log(ErrorLevel, "ColumnTypeDatabaseTypeName failed", zap.Int("index", index))
 	return ""
+}
+
+func (r *Rows) ColumnTypeScanType(index int) reflect.Type {
+	return r.columnType[index]
 }
 
 // Next is to get next result set page.
@@ -225,6 +231,7 @@ func (r *Rows) fetchNextPage(token *string) error {
 	}
 
 	r.ResultOutput.ResultSet.Rows = r.ResultOutput.ResultSet.Rows[rowOffset:]
+	r.columnType = make([]reflect.Type, 0, len(r.ResultOutput.ResultSet.Rows))
 	return nil
 }
 
@@ -245,7 +252,7 @@ func (r *Rows) convertRow(columns []*athena.ColumnInfo, rdata []*athena.Datum, r
 		if val == nil {
 			return ErrAthenaNilDatum
 		}
-		value, err := r.athenaTypeToGoType(columns[i], val.VarCharValue, driverConfig)
+		value, columnType, err := r.athenaTypeToGoType(columns[i], val.VarCharValue, driverConfig)
 		if err != nil {
 			r.tracer.Log(ErrorLevel, "convertrow failed", zap.String("error", err.Error()))
 			r.tracer.Scope().Counter(DriverName + ".failure.convertrow").Inc(1)
@@ -257,6 +264,7 @@ func (r *Rows) convertRow(columns []*athena.ColumnInfo, rdata []*athena.Datum, r
 			zap.String("str", *val.VarCharValue),
 		)*/
 		ret[i] = value
+		r.columnType = append(r.columnType, columnType)
 	}
 	return nil
 }
@@ -271,9 +279,9 @@ func (r *Rows) convertRow(columns []*athena.ColumnInfo, rdata []*athena.Datum, r
 // json is also undocumented above, but appears here https://docs.aws.amazon.com/athena/latest/ug/querying-JSON.html
 // The full list is here: https://prestodb.io/docs/0.172/language/types.html
 // Include ipaddress for forward compatibility.
-func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *string, driverConfig *Config) (interface{}, error) {
+func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *string, driverConfig *Config) (interface{}, reflect.Type, error) {
 	if maskedValue, masked := driverConfig.CheckColumnMasked(*columnInfo.Name); masked { // "comma ok" idiom
-		return maskedValue, nil
+		return maskedValue, reflect.TypeOf(maskedValue), nil
 	}
 	if rawValue == nil {
 		r.tracer.Scope().Counter(DriverName + ".missingvalue").Inc(1)
@@ -282,13 +290,14 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 			zap.String("queryID", r.queryID),
 			zap.String("workgroup", driverConfig.GetWorkgroup().Name))
 		if driverConfig.IsMissingAsEmptyString() {
-			return "", nil
+			return "", reflect.TypeOf(""), nil
 		} else if driverConfig.IsMissingAsDefault() {
-			return r.getDefaultValueForColumnType(*columnInfo.Type), nil
+			v, t := r.getDefaultValueForColumnType(*columnInfo.Type)
+			return v, t, nil
 		}
 		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.config").Inc(1)
 		r.tracer.Log(ErrorLevel, "missing data", zap.String("columnInfo.Name", *columnInfo.Name))
-		return nil, fmt.Errorf("Missing data at column " + *columnInfo.Name)
+		return nil, nil, fmt.Errorf("Missing data at column " + *columnInfo.Name)
 	}
 	val := *rawValue
 	// https://stackoverflow.com/questions/30299649/parse-string-to-specific-type-of-int-int8-int16-int32-int64
@@ -296,54 +305,56 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 	var err error
 	var i int64
 	var f float64
+	var v interface{}
 	switch *columnInfo.Type {
 	case "tinyint":
 		// strconv.ParseInt() behavior is to return (int64(0), err)
 		// which is not as good as just return (nil, err)
 		if i, err = strconv.ParseInt(val, 10, 8); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return int8(i), nil
+		v = int8(i)
 	case "smallint":
 		if i, err = strconv.ParseInt(val, 10, 16); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return int16(i), nil
+		v = int16(i)
 	case "integer":
 		if i, err = strconv.ParseInt(val, 10, 32); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return int32(i), nil
+		v = int32(i)
 	case "bigint":
 		if i, err = strconv.ParseInt(val, 10, 64); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return i, nil
+		v = i
 	case "float", "real":
 		if f, err = strconv.ParseFloat(val, 32); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return float32(f), nil
+		v = float32(f)
 	case "double":
 		if f, err = strconv.ParseFloat(val, 64); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return f, nil
+		v = f
 	// for binary, we assume all chars are 0 or 1; for json,
 	// we assume the json syntax is correct. Leave to caller to verify it.
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
 		"ipaddress", "map", "unknown":
-		return val, nil
+		v = string(val)
 	case "boolean":
 		if val == "true" {
-			return true, nil
+			v = true
 		} else if val == "false" {
-			return false, nil
+			v = false
+		} else {
+			r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.boolean").Inc(1)
+			r.tracer.Log(ErrorLevel, "boolean data error", zap.String("val", val))
+			return nil, nil, fmt.Errorf("unknown value `%s` for boolean", val)
 		}
-		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.boolean").Inc(1)
-		r.tracer.Log(ErrorLevel, "boolean data error", zap.String("val", val))
-		return nil, fmt.Errorf("unknown value `%s` for boolean", val)
 	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
 		vv, err := scanTime(val)
 		if !vv.Valid {
@@ -352,46 +363,52 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 			r.tracer.Log(ErrorLevel, "time data error",
 				zap.String("val", val),
 				zap.String("type", *columnInfo.Type))
-			return nil, err
+			return nil, nil, err
 		}
-		return vv.Time, err
+		v = vv.Time
 	case "array":
-		iter := jcf.BorrowIterator([]byte([]byte(val)))
+		iter := jcf.BorrowIterator([]byte(val))
 		defer jcf.ReturnIterator(iter)
 		var result []interface{}
 		iter.ReadVal(&result)
 		if iter.Error != nil {
-			return nil, fmt.Errorf("cannor unmarshal array values")
+			v = []interface{}{val}
+		} else {
+			v = result
 		}
-		return result, nil
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", *columnInfo.Type))
-		return nil, fmt.Errorf("unknown type `%s` with value %s", *columnInfo.Type, val)
+		return nil, nil, fmt.Errorf("unknown type `%s` with value %s", *columnInfo.Type, val)
 	}
+
+	return v, reflect.TypeOf(v), nil
 }
 
 // getDefaultValueForColumnType is used internally by athenaTypeToGoType to get default value for a column type.
 // This is helpful when column has missing value and we want to display it anyway.
-func (r *Rows) getDefaultValueForColumnType(athenaType string) interface{} {
+func (r *Rows) getDefaultValueForColumnType(athenaType string) (interface{}, reflect.Type) {
+	var v interface{}
 	switch athenaType {
 	case "tinyint", "smallint", "integer", "bigint":
-		return 0
+		v = 0
 	case "boolean":
-		return false
+		v = false
 	case "float", "double", "real":
-		return 0.0
+		v = 0.0
 	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
-		return time.Time{}
+		v = time.Time{}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
 		"ipaddress", "map", "unknown":
-		return ""
+		v = ""
 	case "array":
-		return []interface{}{}
+		v = []interface{}{}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
-		return ""
+		v = ""
 	}
+
+	return v, reflect.TypeOf(v)
 }

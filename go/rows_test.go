@@ -250,22 +250,37 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 			test.queryID,
 			testConf, NewDefaultObservability(testConf))
 		for _, v := range []string{"tinyint", "smallint", "integer", "bigint"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), 0)
+			cv, ct := r.getDefaultValueForColumnType(v)
+			assert.Equal(t, 0, cv)
+			assert.Equal(t, reflect.TypeOf(0), ct)
 		}
 		for _, v := range []string{"json", "char", "varchar", "varbinary", "row", "string", "binary",
 			"struct", "interval year to month", "interval day to second", "decimal",
 			"ipaddress", "map", "unknown"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), "")
+			cv, ct := r.getDefaultValueForColumnType(v)
+			assert.Equal(t, "", cv)
+			assert.Equal(t, reflect.TypeOf(""), ct)
 		}
 		for _, v := range []string{"float", "double", "real"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), 0.0)
+			cv, ct := r.getDefaultValueForColumnType(v)
+			assert.Equal(t, 0.0, cv)
+			assert.Equal(t, reflect.TypeOf(0.0), ct)
 		}
 		for _, v := range []string{"date", "time", "time with time zone", "timestamp", "timestamp with time zone"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), time.Time{})
+			cv, ct := r.getDefaultValueForColumnType(v)
+			assert.Equal(t, time.Time{}, cv)
+			assert.Equal(t, reflect.TypeOf(time.Time{}), ct)
 		}
-		assert.Equal(t, r.getDefaultValueForColumnType("array"), []interface{}{})
-		assert.Equal(t, r.getDefaultValueForColumnType("boolean"), false)
-		assert.Equal(t, r.getDefaultValueForColumnType("XXX"), "")
+
+		cv, ct := r.getDefaultValueForColumnType("array")
+		assert.Equal(t, []interface{}{}, cv)
+		assert.Equal(t, reflect.TypeOf([]interface{}{}), ct)
+		cv, ct = r.getDefaultValueForColumnType("boolean")
+		assert.Equal(t, false, cv)
+		assert.Equal(t, reflect.TypeOf(false), ct)
+		cv, ct = r.getDefaultValueForColumnType("XXX")
+		assert.Equal(t, "", cv)
+		assert.Equal(t, reflect.TypeOf(""), ct)
 	}
 }
 
@@ -276,84 +291,93 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	c := newColumnInfo("a", "tinyint")
 	// tinyint
 	rv := "1"
-	g, e := r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e := r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, int8(1), g)
+	assert.Equal(t, reflect.TypeOf(int8(1)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, _, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
 
 	// smallint
 	c = newColumnInfo("a", "smallint")
 	rv = "1"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, int16(1), g)
+	assert.Equal(t, reflect.TypeOf(int16(1)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, _, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
 
 	// int
 	c = newColumnInfo("a", "integer")
 	rv = "1"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, int32(1), g)
+	assert.Equal(t, reflect.TypeOf(int32(1)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
+	assert.Nil(t, ct)
 
 	// bigint
 	c = newColumnInfo("a", "bigint")
 	rv = "1"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, int64(1), g)
+	assert.Equal(t, reflect.TypeOf(int64(1)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
+	assert.Nil(t, ct)
 
 	// float
 	c = newColumnInfo("a", "float")
 	rv = "1.0"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, float32(1.0), g)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
-
+	assert.Nil(t, ct)
 	// real
 	c = newColumnInfo("a", "real")
 	rv = "1.0"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, float32(1.0), g)
+	assert.Equal(t, reflect.TypeOf(float32(1.0)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
+	assert.Nil(t, ct)
 
 	// double
 	c = newColumnInfo("a", "double")
 	rv = "1.0"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, float64(1.0), g)
+	assert.Equal(t, reflect.TypeOf(float64(1.0)), ct)
 
 	rv = "x"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
 
@@ -361,29 +385,32 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	for _, s := range []string{"json", "char", "varchar", "varbinary", "row",
 		"string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown"} {
+		"ipaddress", "map", "unknown"} {
 		c = newColumnInfo("a", s)
 		rv = "012"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
 		assert.Equal(t, "012", g)
+		assert.Equal(t, reflect.TypeOf(""), ct)
 	}
 
 	// boolean
 	for _, s := range []string{"boolean"} {
 		c = newColumnInfo("a", s)
 		rv = "true"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
 		assert.Equal(t, true, g)
+		assert.Equal(t, reflect.TypeOf(false), ct)
 
 		rv = "false"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
 		assert.Equal(t, false, g)
+		assert.Equal(t, reflect.TypeOf(false), ct)
 
 		rv = "x"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.NotNil(t, e)
 		assert.Nil(t, g)
 	}
@@ -394,43 +421,44 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 		"timestamp", "timestamp with time zone"} {
 		c = newColumnInfo("a", s)
 		rv = "2020-01-20"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
 		assert.Equal(t, reflect.TypeOf(now), reflect.TypeOf(g))
+		assert.Equal(t, reflect.TypeOf(time.Time{}), ct)
 
 		rv = "x"
-		g, e = r.athenaTypeToGoType(c, &rv, testConf)
+		g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.NotNil(t, e)
 		assert.Nil(t, g)
 	}
 
 	c = newColumnInfo("a", "some_weird_type")
 	rv = "123"
-	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
 
 	// missing data - rawValue is nil
 	c = newColumnInfo("a", "integer")
-	g, e = r.athenaTypeToGoType(c, nil, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, g, "")
 
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(true)
-	g, e = r.athenaTypeToGoType(c, nil, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, g, 0)
 
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(false)
-	g, e = r.athenaTypeToGoType(c, nil, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.NotNil(t, e)
 	assert.Nil(t, g)
 
 	// masked column
 	testConf.SetMaskedColumnValue("a", "xxx")
-	g, e = r.athenaTypeToGoType(c, nil, testConf)
+	g, ct, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
 	assert.Equal(t, g, "xxx")
 }
