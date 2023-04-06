@@ -409,37 +409,39 @@ func (r *Rows) initColumnTypes() {
 	columnInfos := r.ResultOutput.ResultSet.ResultSetMetadata.ColumnInfo
 	r.columnType = make([]reflect.Type, len(columnInfos))
 	for i, columnInfo := range columnInfos {
-		val := r.getNullTypeForColumnType(*columnInfo.Type)
-		r.columnType[i] = reflect.TypeOf(val)
+		r.columnType[i] = r.getScanType(*columnInfo.Type)
 	}
 
 }
 
-func (r *Rows) getNullTypeForColumnType(athenaType string) interface{} {
+func (r *Rows) getScanType(athenaType string) reflect.Type {
+	var v interface{}
 	switch athenaType {
 	case "tinyint", "smallint":
-		return sql.NullInt16{}
+		v = sql.NullInt16{}
 	case "integer":
-		return sql.NullInt32{}
+		v = sql.NullInt32{}
 	case "bigint":
-		return sql.NullInt64{}
+		v = sql.NullInt64{}
 	case "boolean":
-		return sql.NullBool{}
+		v = sql.NullBool{}
 	case "float", "real", "double":
-		return sql.NullFloat64{}
+		v = sql.NullFloat64{}
 	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
-		return sql.NullTime{}
+		v = sql.NullTime{}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
 		"ipaddress", "map", "unknown":
-		return sql.NullString{}
+		v = sql.NullString{}
 	case "array":
-		return NullSliceAny{}
+		v = NullSliceAny{}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
-		return ""
+		v = sql.NullString{}
 	}
+
+	return reflect.TypeOf(v)
 }
 
 // NullSliceAny represents a slice of any that may be null.
