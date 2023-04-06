@@ -367,6 +367,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 		iter := jcf.BorrowIterator([]byte(val))
 		defer jcf.ReturnIterator(iter)
 		var slice []interface{}
+		iter.ReadVal(&slice)
 		if iter.Error != nil {
 			return []interface{}{val}, nil
 		} else {
