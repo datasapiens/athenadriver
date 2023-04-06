@@ -250,26 +250,51 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 		r, _ := NewRows(context.Background(), newMockAthenaClient(),
 			test.queryID,
 			testConf, NewDefaultObservability(testConf))
-		for _, v := range []string{"tinyint", "smallint", "integer", "bigint"} {
-			assert.Equal(t, sql.NullInt16{Int16: 0, Valid: true}, r.getDefaultValueForColumnType(v))
+		for _, v := range []string{"tinyint", "smallint"} {
+			assert.Equal(t, sql.NullInt16{
+				Int16: 0,
+				Valid: true}, r.getDefaultValueForColumnType(v))
 		}
 		for _, v := range []string{"integer"} {
-			assert.Equal(t, sql.NullInt16{Int16: 0, Valid: true}, r.getDefaultValueForColumnType(v))
+			assert.Equal(t, sql.NullInt32{
+				Int32: 0,
+				Valid: true}, r.getDefaultValueForColumnType(v))
+		}
+		for _, v := range []string{"bigint"} {
+			assert.Equal(t, sql.NullInt64{
+				Int64: 0,
+				Valid: true}, r.getDefaultValueForColumnType(v))
 		}
 		for _, v := range []string{"json", "char", "varchar", "varbinary", "row", "string", "binary",
 			"struct", "interval year to month", "interval day to second", "decimal",
 			"ipaddress", "map", "unknown"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), "")
+			assert.Equal(t, sql.NullString{
+				String: "",
+				Valid:  true}, r.getDefaultValueForColumnType(v))
 		}
 		for _, v := range []string{"float", "double", "real"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), 0.0)
+			assert.Equal(t, sql.NullFloat64{
+				Float64: 0.0,
+				Valid:   true}, r.getDefaultValueForColumnType(v))
 		}
 		for _, v := range []string{"date", "time", "time with time zone", "timestamp", "timestamp with time zone"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), time.Time{})
+			assert.Equal(t, sql.NullTime{
+				Time:  time.Time{},
+				Valid: true,
+			}, r.getDefaultValueForColumnType(v), time.Time{})
 		}
-		assert.Equal(t, []interface{}{}, r.getDefaultValueForColumnType("array"))
-		assert.Equal(t, r.getDefaultValueForColumnType("boolean"), false)
-		assert.Equal(t, r.getDefaultValueForColumnType("XXX"), "")
+		assert.Equal(t, NullSliceAny{
+			SliceAny: []interface{}{},
+			Valid:    true,
+		}, r.getDefaultValueForColumnType("array"))
+		assert.Equal(t, sql.NullBool{
+			Bool:  false,
+			Valid: true,
+		}, r.getDefaultValueForColumnType("boolean"))
+		assert.Equal(t, sql.NullString{
+			String: "",
+			Valid:  true,
+		}, r.getDefaultValueForColumnType("XXX"))
 	}
 }
 
@@ -282,7 +307,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv := "1"
 	g, e := r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, int8(1), g)
+	assert.Equal(t, sql.NullInt16{
+		Int16: 1,
+		Valid: true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -294,7 +322,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, int16(1), g)
+	assert.Equal(t, sql.NullInt16{
+		Int16: 1,
+		Valid: true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -306,7 +337,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, int32(1), g)
+	assert.Equal(t, sql.NullInt32{
+		Int32: 1,
+		Valid: true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -318,7 +352,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, int64(1), g)
+	assert.Equal(t, sql.NullInt64{
+		Int64: 1,
+		Valid: true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -330,7 +367,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1.0"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, float32(1.0), g)
+	assert.Equal(t, sql.NullFloat64{
+		Float64: 1.0,
+		Valid:   true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -342,7 +382,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1.0"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, float32(1.0), g)
+	assert.Equal(t, sql.NullFloat64{
+		Float64: 1.0,
+		Valid:   true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -354,7 +397,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	rv = "1.0"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, float64(1.0), g)
+	assert.Equal(t, sql.NullFloat64{
+		Float64: 1.0,
+		Valid:   true,
+	}, g)
 
 	rv = "x"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -370,31 +416,46 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 		rv = "012"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
-		assert.Equal(t, "012", g)
+		assert.Equal(t, sql.NullString{
+			String: "012",
+			Valid:  true,
+		}, g)
 	}
 
 	c = newColumnInfo("a", "array")
 	rv = "[\"a\",\"b\"]"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, []interface{}{"a", "b"}, g)
+	assert.Equal(t, NullSliceAny{
+		SliceAny: []interface{}{"a", "b"},
+		Valid:    true,
+	}, g)
 	c = newColumnInfo("a", "array")
 	rv = "[3.0,4.0]"
 	g, e = r.athenaTypeToGoType(c, &rv, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, []interface{}{3.0, 4.0}, g)
+	assert.Equal(t, NullSliceAny{
+		SliceAny: []interface{}{3.0, 4.0},
+		Valid:    true,
+	}, g)
 	// boolean
 	for _, s := range []string{"boolean"} {
 		c = newColumnInfo("a", s)
 		rv = "true"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
-		assert.Equal(t, true, g)
+		assert.Equal(t, sql.NullBool{
+			Bool:  true,
+			Valid: true,
+		}, g)
 
 		rv = "false"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
-		assert.Equal(t, false, g)
+		assert.Equal(t, sql.NullBool{
+			Bool:  false,
+			Valid: true,
+		}, g)
 
 		rv = "x"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -410,7 +471,10 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 		rv = "2020-01-20"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
 		assert.Nil(t, e)
-		assert.Equal(t, reflect.TypeOf(now), reflect.TypeOf(g))
+		assert.Equal(t, reflect.TypeOf(sql.NullTime{
+			Time:  now,
+			Valid: true,
+		}), reflect.TypeOf(g))
 
 		rv = "x"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -428,19 +492,25 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	c = newColumnInfo("a", "integer")
 	g, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, g, "")
+	assert.Equal(t, sql.NullInt32{
+		Int32: 0,
+		Valid: false}, g)
 
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(true)
 	g, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, g, 0)
+	assert.Equal(t, sql.NullInt32{
+		Int32: 0,
+		Valid: true}, g)
 
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(false)
 	g, e = r.athenaTypeToGoType(c, nil, testConf)
-	assert.NotNil(t, e)
-	assert.Nil(t, g)
+	assert.Nil(t, e)
+	assert.Equal(t, sql.NullInt32{
+		Int32: 0,
+		Valid: false}, g)
 
 	// masked column
 	testConf.SetMaskedColumnValue("a", "xxx")
@@ -519,7 +589,7 @@ func TestRows_NewRows(t *testing.T) {
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	e = r.Next(dest)
-	assert.Equal(t, e.Error(), "Missing data at column c1")
+	assert.Nil(t, e)
 
 	r, e = NewRows(context.Background(), newMockAthenaClient(),
 		"missing_data_resp2",

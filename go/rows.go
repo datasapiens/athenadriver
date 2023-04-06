@@ -457,7 +457,10 @@ func (r *Rows) getDefaultValueForColumnType(athenaType string) interface{} {
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
-		return ""
+		return sql.NullString{
+			String: "",
+			Valid:  true,
+		}
 	}
 }
 
