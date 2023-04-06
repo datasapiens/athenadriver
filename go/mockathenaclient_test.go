@@ -470,7 +470,7 @@ func OneColumnZeroRowResponse(token string) (*athena.GetQueryResultsOutput,
 	error) {
 	switch token {
 	case "":
-		c := newColumnInfo("a", nil)
+		c := newColumnInfo("a", "string")
 		getQueryResultsOutput := &athena.GetQueryResultsOutput{
 			ResultSet: &athena.ResultSet{
 				ResultSetMetadata: &athena.ResultSetMetadata{
@@ -490,7 +490,7 @@ func OneColumnZeroRowResponseValid(token string) (*athena.GetQueryResultsOutput,
 	error) {
 	switch token {
 	case "":
-		c := newColumnInfo("rows", nil)
+		c := newColumnInfo("rows", "smallint")
 		var i int64 = 1024
 		getQueryResultsOutput := &athena.GetQueryResultsOutput{
 			ResultSet: &athena.ResultSet{
@@ -512,8 +512,8 @@ func ColumnMoreThanRowFieldResponse(token string) (*athena.GetQueryResultsOutput
 	error) {
 	switch token {
 	case "":
-		c1 := newColumnInfo("c1", nil)
-		c2 := newColumnInfo("c2", nil)
+		c1 := newColumnInfo("c1", "float")
+		c2 := newColumnInfo("c2", "integer")
 		var i int64 = 1024
 		getQueryResultsOutput := &athena.GetQueryResultsOutput{
 			ResultSet: &athena.ResultSet{
@@ -540,8 +540,8 @@ func RowFieldMoreThanColumnsResponse(token string) (*athena.GetQueryResultsOutpu
 	error) {
 	switch token {
 	case "":
-		c1 := newColumnInfo("c1", nil)
-		c2 := newColumnInfo("c2", nil)
+		c1 := newColumnInfo("c1", "json")
+		c2 := newColumnInfo("c2", "double")
 		var i int64 = 1024
 		getQueryResultsOutput := &athena.GetQueryResultsOutput{
 			ResultSet: &athena.ResultSet{

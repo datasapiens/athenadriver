@@ -25,6 +25,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -32,10 +33,13 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/service/athena/athenaiface"
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/athena"
 )
+
+var jcf = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Rows defines rows in AWS Athena ResultSet.
 type Rows struct {
@@ -47,6 +51,7 @@ type Rows struct {
 	config          *Config
 	tracer          *DriverTracer
 	pageCount       int64
+	columnType      []reflect.Type
 }
 
 // NewNonOpsRows is to create a new Rows.
@@ -77,6 +82,7 @@ func NewRows(ctx context.Context, athenaAPI athenaiface.AthenaAPI, queryID strin
 	if err := r.fetchNextPage(nil); err != nil {
 		return nil, err
 	}
+	r.initColumnTypes()
 	return &r, nil
 }
 
@@ -87,6 +93,10 @@ func (r *Rows) Columns() []string {
 		columns = append(columns, *colInfo.Name)
 	}
 	return columns
+}
+
+func (r *Rows) ColumnTypeScanType(index int) reflect.Type {
+	return r.columnType[index]
 }
 
 // ColumnTypeDatabaseTypeName will be called by sql framework.
@@ -330,7 +340,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 	// we assume the json syntax is correct. Leave to caller to verify it.
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown":
+		"ipaddress", "map", "unknown":
 		return val, nil
 	case "boolean":
 		if val == "true" {
@@ -352,6 +362,16 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 			return nil, err
 		}
 		return vv.Time, err
+	case "array":
+		iter := jcf.BorrowIterator([]byte(val))
+		defer jcf.ReturnIterator(iter)
+		var result []interface{}
+		iter.ReadVal(&result)
+		if iter.Error != nil {
+			return []interface{}{val}, nil
+		} else {
+			return result, nil
+		}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", *columnInfo.Type))
@@ -373,11 +393,23 @@ func (r *Rows) getDefaultValueForColumnType(athenaType string) interface{} {
 		return time.Time{}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown":
+		"ipaddress", "map", "unknown":
 		return ""
+	case "array":
+		return []interface{}{}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
 		return ""
 	}
+}
+
+func (r *Rows) initColumnTypes() {
+	columnInfos := r.ResultOutput.ResultSet.ResultSetMetadata.ColumnInfo
+	r.columnType = make([]reflect.Type, len(columnInfos))
+	for i, columnInfo := range columnInfos {
+		val := r.getDefaultValueForColumnType(*columnInfo.Type)
+		r.columnType[i] = reflect.TypeOf(val)
+	}
+
 }
