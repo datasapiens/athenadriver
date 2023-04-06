@@ -397,6 +397,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 		if iter.Error != nil {
 			slice = []interface{}{val}
 		}
+		fmt.Println("!!!!! ", slice)
 		return NullSliceAny{
 			SliceAny: slice,
 			Valid:    true,
@@ -510,13 +511,16 @@ type NullSliceAny struct {
 // Scan implements the sql.Scanner interface.
 func (s *NullSliceAny) Scan(value interface{}) error {
 	if value == nil {
+		fmt.Println("NULL VALUE")
 		s.SliceAny, s.Valid = []interface{}{}, false
 		return nil
 	}
 	val, ok := value.([]interface{})
 	if !ok {
+		fmt.Println("NOT OK")
 		return fmt.Errorf("athena: cannot convert %v (%T) to []any", value, value)
 	}
+	fmt.Println(value)
 	s.SliceAny = val
 	s.Valid = true
 	return nil
