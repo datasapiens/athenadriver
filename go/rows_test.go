@@ -254,7 +254,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 		}
 		for _, v := range []string{"json", "char", "varchar", "varbinary", "row", "string", "binary",
 			"struct", "interval year to month", "interval day to second", "decimal",
-			"ipaddress", "array", "map", "unknown"} {
+			"ipaddress", "map", "unknown"} {
 			assert.Equal(t, r.getDefaultValueForColumnType(v), "")
 		}
 		for _, v := range []string{"float", "double", "real"} {
@@ -263,6 +263,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 		for _, v := range []string{"date", "time", "time with time zone", "timestamp", "timestamp with time zone"} {
 			assert.Equal(t, r.getDefaultValueForColumnType(v), time.Time{})
 		}
+		assert.Equal(t, []interface{}{}, r.getDefaultValueForColumnType("array"))
 		assert.Equal(t, r.getDefaultValueForColumnType("boolean"), false)
 		assert.Equal(t, r.getDefaultValueForColumnType("XXX"), "")
 	}
@@ -360,7 +361,7 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	for _, s := range []string{"json", "char", "varchar", "varbinary", "row",
 		"string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "array", "map", "unknown"} {
+		"ipaddress", "map", "unknown"} {
 		c = newColumnInfo("a", s)
 		rv = "012"
 		g, e = r.athenaTypeToGoType(c, &rv, testConf)
@@ -368,6 +369,16 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 		assert.Equal(t, "012", g)
 	}
 
+	c = newColumnInfo("a", "array")
+	rv = "[\"a\",\"b\"]"
+	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	assert.Nil(t, e)
+	assert.Equal(t, []interface{}{"a", "b"}, g)
+	c = newColumnInfo("a", "array")
+	rv = "[3.0,4.0]"
+	g, e = r.athenaTypeToGoType(c, &rv, testConf)
+	assert.Nil(t, e)
+	assert.Equal(t, []interface{}{3.0, 4.0}, g)
 	// boolean
 	for _, s := range []string{"boolean"} {
 		c = newColumnInfo("a", s)
