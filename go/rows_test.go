@@ -22,6 +22,7 @@ package athenadriver
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"io"
 	"reflect"
@@ -250,7 +251,10 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 			test.queryID,
 			testConf, NewDefaultObservability(testConf))
 		for _, v := range []string{"tinyint", "smallint", "integer", "bigint"} {
-			assert.Equal(t, r.getDefaultValueForColumnType(v), 0)
+			assert.Equal(t, sql.NullInt16{Int16: 0, Valid: true}, r.getDefaultValueForColumnType(v))
+		}
+		for _, v := range []string{"integer"} {
+			assert.Equal(t, sql.NullInt16{Int16: 0, Valid: true}, r.getDefaultValueForColumnType(v))
 		}
 		for _, v := range []string{"json", "char", "varchar", "varbinary", "row", "string", "binary",
 			"struct", "interval year to month", "interval day to second", "decimal",

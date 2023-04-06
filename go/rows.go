@@ -22,6 +22,7 @@ package athenadriver
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"io"
@@ -288,14 +289,11 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 			zap.String("columnInfo.Name", *columnInfo.Name),
 			zap.String("queryID", r.queryID),
 			zap.String("workgroup", driverConfig.GetWorkgroup().Name))
-		if driverConfig.IsMissingAsEmptyString() {
-			return "", nil
-		} else if driverConfig.IsMissingAsDefault() {
+		if driverConfig.IsMissingAsDefault() {
 			return r.getDefaultValueForColumnType(*columnInfo.Type), nil
 		}
-		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.config").Inc(1)
-		r.tracer.Log(ErrorLevel, "missing data", zap.String("columnInfo.Name", *columnInfo.Name))
-		return nil, fmt.Errorf("Missing data at column " + *columnInfo.Name)
+
+		return r.getNullTypeForColumnType(*columnInfo.Type), nil
 	}
 	val := *rawValue
 	// https://stackoverflow.com/questions/30299649/parse-string-to-specific-type-of-int-int8-int16-int32-int64
@@ -303,6 +301,7 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 	var err error
 	var i int64
 	var f float64
+
 	switch *columnInfo.Type {
 	case "tinyint":
 		// strconv.ParseInt() behavior is to return (int64(0), err)
@@ -310,47 +309,72 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 		if i, err = strconv.ParseInt(val, 10, 8); err != nil {
 			return nil, err
 		}
-		return int8(i), nil
+
+		return sql.NullInt16{
+			Int16: int16(i),
+			Valid: true,
+		}, nil
 	case "smallint":
 		if i, err = strconv.ParseInt(val, 10, 16); err != nil {
 			return nil, err
 		}
-		return int16(i), nil
+		return sql.NullInt16{
+			Int16: int16(i),
+			Valid: true,
+		}, nil
 	case "integer":
 		if i, err = strconv.ParseInt(val, 10, 32); err != nil {
 			return nil, err
 		}
-		return int32(i), nil
+		return sql.NullInt32{
+			Int32: int32(i),
+			Valid: true,
+		}, nil
 	case "bigint":
 		if i, err = strconv.ParseInt(val, 10, 64); err != nil {
 			return nil, err
 		}
-		return i, nil
+		return sql.NullInt64{
+			Int64: i,
+			Valid: true,
+		}, nil
 	case "float", "real":
 		if f, err = strconv.ParseFloat(val, 32); err != nil {
 			return nil, err
 		}
-		return float32(f), nil
+		return sql.NullFloat64{
+			Float64: f,
+			Valid:   true,
+		}, nil
 	case "double":
 		if f, err = strconv.ParseFloat(val, 64); err != nil {
 			return nil, err
 		}
-		return f, nil
+		return sql.NullFloat64{
+			Float64: f,
+			Valid:   true,
+		}, nil
 	// for binary, we assume all chars are 0 or 1; for json,
 	// we assume the json syntax is correct. Leave to caller to verify it.
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
 		"ipaddress", "map", "unknown":
-		return val, nil
+		return sql.NullString{
+			String: val,
+			Valid:  true,
+		}, nil
 	case "boolean":
-		if val == "true" {
-			return true, nil
-		} else if val == "false" {
-			return false, nil
+		v, err := strconv.ParseBool(val)
+		if err != nil {
+			r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.boolean").Inc(1)
+			r.tracer.Log(ErrorLevel, "boolean data error", zap.String("val", val))
+			return nil, fmt.Errorf("unknown value `%s` for boolean", val)
 		}
-		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.boolean").Inc(1)
-		r.tracer.Log(ErrorLevel, "boolean data error", zap.String("val", val))
-		return nil, fmt.Errorf("unknown value `%s` for boolean", val)
+		return sql.NullBool{
+			Bool:  v,
+			Valid: true,
+		}, nil
+
 	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
 		vv, err := scanTime(val)
 		if !vv.Valid {
@@ -361,17 +385,22 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 				zap.String("type", *columnInfo.Type))
 			return nil, err
 		}
-		return vv.Time, err
+		return sql.NullTime{
+			Time:  vv.Time,
+			Valid: true,
+		}, nil
 	case "array":
 		iter := jcf.BorrowIterator([]byte(val))
 		defer jcf.ReturnIterator(iter)
-		var result []interface{}
-		iter.ReadVal(&result)
+		var slice []interface{}
+		iter.ReadVal(&slice)
 		if iter.Error != nil {
-			return []interface{}{val}, nil
-		} else {
-			return result, nil
+			slice = []interface{}{val}
 		}
+		return NullSliceAny{
+			SliceAny: slice,
+			Valid:    true,
+		}, nil
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.convertvalue.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", *columnInfo.Type))
@@ -383,20 +412,48 @@ func (r *Rows) athenaTypeToGoType(columnInfo *athena.ColumnInfo, rawValue *strin
 // This is helpful when column has missing value and we want to display it anyway.
 func (r *Rows) getDefaultValueForColumnType(athenaType string) interface{} {
 	switch athenaType {
-	case "tinyint", "smallint", "integer", "bigint":
-		return 0
+	case "tinyint", "smallint":
+		return sql.NullInt16{
+			Int16: 0,
+			Valid: true,
+		}
+	case "integer":
+		return sql.NullInt32{
+			Int32: 0,
+			Valid: true,
+		}
+	case "bigint":
+		return sql.NullInt64{
+			Int64: 0,
+			Valid: true,
+		}
 	case "boolean":
-		return false
+		return sql.NullBool{
+			Bool:  false,
+			Valid: true,
+		}
 	case "float", "double", "real":
-		return 0.0
+		return sql.NullFloat64{
+			Float64: 0.0,
+			Valid:   true,
+		}
 	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
-		return time.Time{}
+		return sql.NullTime{
+			Time:  time.Time{},
+			Valid: true,
+		}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
 		"ipaddress", "map", "unknown":
-		return ""
+		return sql.NullString{
+			String: "",
+			Valid:  true,
+		}
 	case "array":
-		return []interface{}{}
+		return NullSliceAny{
+			SliceAny: []interface{}{},
+			Valid:    true,
+		}
 	default:
 		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
 		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
@@ -408,8 +465,56 @@ func (r *Rows) initColumnTypes() {
 	columnInfos := r.ResultOutput.ResultSet.ResultSetMetadata.ColumnInfo
 	r.columnType = make([]reflect.Type, len(columnInfos))
 	for i, columnInfo := range columnInfos {
-		val := r.getDefaultValueForColumnType(*columnInfo.Type)
+		val := r.getNullTypeForColumnType(*columnInfo.Type)
 		r.columnType[i] = reflect.TypeOf(val)
 	}
 
+}
+
+func (r *Rows) getNullTypeForColumnType(athenaType string) interface{} {
+	switch athenaType {
+	case "tinyint", "smallint":
+		return sql.NullInt16{}
+	case "integer":
+		return sql.NullInt32{}
+	case "bigint":
+		return sql.NullInt64{}
+	case "boolean":
+		return sql.NullBool{}
+	case "float", "real", "double":
+		return sql.NullFloat64{}
+	case "date", "time", "time with time zone", "timestamp", "timestamp with time zone":
+		return sql.NullTime{}
+	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
+		"struct", "interval year to month", "interval day to second", "decimal",
+		"ipaddress", "map", "unknown":
+		return sql.NullString{}
+	case "array":
+		return NullSliceAny{}
+	default:
+		r.tracer.Scope().Counter(DriverName + ".failure.defaultvalueforcolumntype.type").Inc(1)
+		r.tracer.Log(ErrorLevel, "column data type error", zap.String("columnInfo.Type", athenaType))
+		return ""
+	}
+}
+
+// NullSliceAny represents a slice of any that may be null.
+type NullSliceAny struct {
+	SliceAny []interface{}
+	Valid    bool
+}
+
+// Scan implements the sql.Scanner interface.
+func (s *NullSliceAny) Scan(value interface{}) error {
+	if value == nil {
+		s.SliceAny, s.Valid = []interface{}{}, false
+		return nil
+	}
+	val, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("athena: cannot convert %v (%T) to []any", value, value)
+	}
+	s.SliceAny = val
+	s.Valid = true
+	return nil
 }
