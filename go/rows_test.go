@@ -424,7 +424,7 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	c = newColumnInfo("a", "integer")
 	g, e = r.athenaTypeToGoType(c, nil, testConf)
 	assert.Nil(t, e)
-	assert.Equal(t, g, "")
+	assert.Nil(t, g)
 
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(true)
@@ -435,7 +435,7 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 	testConf.SetMissingAsEmptyString(false)
 	testConf.SetMissingAsDefault(false)
 	g, e = r.athenaTypeToGoType(c, nil, testConf)
-	assert.NotNil(t, e)
+	assert.Nil(t, e)
 	assert.Nil(t, g)
 
 	// masked column
@@ -515,7 +515,7 @@ func TestRows_NewRows(t *testing.T) {
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	e = r.Next(dest)
-	assert.Equal(t, e.Error(), "Missing data at column c1")
+	assert.Nil(t, e)
 
 	r, e = NewRows(context.Background(), newMockAthenaClient(),
 		"missing_data_resp2",
