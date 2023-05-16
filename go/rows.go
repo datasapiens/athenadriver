@@ -40,7 +40,12 @@ import (
 	"github.com/aws/aws-sdk-go/service/athena"
 )
 
-var jcf = jsoniter.ConfigCompatibleWithStandardLibrary
+var jcf = jsoniter.Config{
+	EscapeHTML:             true,
+	SortMapKeys:            true,
+	ValidateJsonRawMessage: true,
+	UseNumber:              true,
+}.Froze()
 
 // Rows defines rows in AWS Athena ResultSet.
 type Rows struct {
