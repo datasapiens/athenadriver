@@ -31,10 +31,10 @@ import (
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/athena"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/athena"
 )
 
 // SQLConnector is the connector for AWS Athena Driver.
@@ -73,37 +73,32 @@ func (c *SQLConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		c.tracer.SetLogger(logger)
 	}
 
-	var awsAthenaSession *session.Session
 	var err error
+	var awsConfig aws.Config
 	// respect AWS_SDK_LOAD_CONFIG and local ~/.aws/credentials, ~/.aws/config
 	if ok, _ := strconv.ParseBool(os.Getenv("AWS_SDK_LOAD_CONFIG")); ok {
 		if profile := c.config.GetAWSProfile(); profile != "" {
-			awsAthenaSession, err = session.NewSession(&aws.Config{
-				Credentials: credentials.NewSharedCredentials("", profile),
-			})
+			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+				config.WithSharedConfigProfile(profile))
 		} else {
-			awsAthenaSession, err = session.NewSession(&aws.Config{})
+			awsConfig, err = config.LoadDefaultConfig(context.TODO())
 		}
 	} else if c.config.GetAccessID() != "" {
-		staticCredentials := credentials.NewStaticCredentials(c.config.GetAccessID(),
-			c.config.GetSecretAccessKey(),
-			c.config.GetSessionToken())
-		awsConfig := &aws.Config{
-			Region:      aws.String(c.config.GetRegion()),
-			Credentials: staticCredentials,
-		}
-		awsAthenaSession, err = session.NewSession(awsConfig)
+		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(c.config.GetRegion()),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				c.config.GetAccessID(), c.config.GetSecretAccessKey(), c.config.GetSessionToken())))
+
 	} else {
-		awsAthenaSession, err = session.NewSession(&aws.Config{
-			Region: aws.String(c.config.GetRegion()),
-		})
+		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(c.config.GetRegion()))
 	}
 	if err != nil {
 		c.tracer.Scope().Counter(DriverName + ".failure.sqlconnector.newsession").Inc(1)
 		return nil, err
 	}
 
-	athenaAPI := athena.New(awsAthenaSession)
+	athenaAPI := athena.NewFromConfig(awsConfig)
 	timeConnect := time.Since(now)
 	conn := &Connection{
 		athenaAPI: athenaAPI,

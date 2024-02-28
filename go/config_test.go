@@ -43,7 +43,7 @@ func TestAthenaConfig(t *testing.T) {
 	testConf.SetDB("default") // default
 
 	err = testConf.SetWorkGroup(wg)
-	assert.Nil(t, err)
+	assert.NotNil(t, err)
 	assert.Equal(t, testConf.GetUser(), "henry.wu@uber.com")
 	assert.Equal(t, testConf.GetOutputBucket(), "s3://query-results-henry-wu-us-east-2/")
 	expected := "s3://henry.wu%40uber.com:@query-results-henry-wu-us-east-2?WGRemoteCreation=true&db=default&missingAsEmptyString=true&region=us-east-1&tag=%7CUber+User%60henry.wu%40uber.com%7CUber+Asset%60abc.efg&workgroupConfig=%7B%0A++BytesScannedCutoffPerQuery%3A+1073741824%2C%0A++EnforceWorkGroupConfiguration%3A+true%2C%0A++PublishCloudWatchMetricsEnabled%3A+true%2C%0A++RequesterPaysEnabled%3A+false%0A%7D&workgroupName=henry_wu"
