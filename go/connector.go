@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"log"
 	"sync"
 
 	"os"
@@ -132,10 +133,13 @@ func (c *SQLConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		return nil, err
 	}
 	if athenaClient == nil {
+		log.Println("Athena Create Client")
 		clientMutext.Lock()
 		athenaClient = athena.NewFromConfig(awsConfig)
 		clients[cacheKey] = athenaClient
 		clientMutext.Unlock()
+	} else {
+		log.Println("Client from cache")
 	}
 
 	timeConnect := time.Since(now)
@@ -143,6 +147,7 @@ func (c *SQLConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		athenaAPI: athenaClient,
 		connector: c,
 	}
+	log.Println("Athena Connection time: ", timeConnect)
 	c.tracer.Scope().Timer(DriverName + ".connector.connect").Record(timeConnect)
 	return conn, nil
 }
