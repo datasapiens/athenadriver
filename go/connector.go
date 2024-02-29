@@ -133,7 +133,7 @@ func (c *SQLConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 	if athenaClient == nil {
 		clientMutext.Lock()
-		athenaClient := athena.NewFromConfig(awsConfig)
+		athenaClient = athena.NewFromConfig(awsConfig)
 		clients[cacheKey] = athenaClient
 		clientMutext.Unlock()
 	}
