@@ -23,6 +23,8 @@ package athenadriver
 import (
 	"context"
 	"database/sql/driver"
+	"fmt"
+	"sync"
 
 	"os"
 	"strconv"
@@ -36,6 +38,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/athena"
 )
+
+// map key format: region#profile#accessid
+var clients = map[string]*athena.Client{}
+
+var clientMutext sync.RWMutex
 
 // SQLConnector is the connector for AWS Athena Driver.
 type SQLConnector struct {
@@ -75,33 +82,65 @@ func (c *SQLConnector) Connect(ctx context.Context) (driver.Conn, error) {
 
 	var err error
 	var awsConfig aws.Config
+	var athenaClient *athena.Client
+	var cacheKey string
 	// respect AWS_SDK_LOAD_CONFIG and local ~/.aws/credentials, ~/.aws/config
 	if ok, _ := strconv.ParseBool(os.Getenv("AWS_SDK_LOAD_CONFIG")); ok {
-		if profile := c.config.GetAWSProfile(); profile != "" {
-			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
-				config.WithSharedConfigProfile(profile))
+		profile := c.config.GetAWSProfile()
+		cacheKey = fmt.Sprintf("#%s#", profile)
+		clientMutext.RLock()
+		if client, found := clients[cacheKey]; found {
+			clientMutext.RUnlock()
+			athenaClient = client
 		} else {
-			awsConfig, err = config.LoadDefaultConfig(context.TODO())
+			clientMutext.RUnlock()
+			if profile != "" {
+				awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+					config.WithSharedConfigProfile(profile))
+			} else {
+				awsConfig, err = config.LoadDefaultConfig(context.TODO())
+			}
 		}
 	} else if c.config.GetAccessID() != "" {
-		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
-			config.WithRegion(c.config.GetRegion()),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-				c.config.GetAccessID(), c.config.GetSecretAccessKey(), c.config.GetSessionToken())))
+		cacheKey = fmt.Sprintf("%s##%s", c.config.GetRegion(), c.config.GetAccessID())
+		clientMutext.RLock()
+		if client, found := clients[cacheKey]; found {
+			clientMutext.RUnlock()
+			athenaClient = client
+		} else {
+			clientMutext.RUnlock()
+			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+				config.WithRegion(c.config.GetRegion()),
+				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+					c.config.GetAccessID(), c.config.GetSecretAccessKey(), c.config.GetSessionToken())))
+		}
 
 	} else {
-		awsConfig, err = config.LoadDefaultConfig(context.TODO(),
-			config.WithRegion(c.config.GetRegion()))
+		cacheKey = fmt.Sprintf("%s##", c.config.GetRegion())
+		clientMutext.RLock()
+		if client, found := clients[cacheKey]; found {
+			clientMutext.RUnlock()
+			athenaClient = client
+		} else {
+			clientMutext.RUnlock()
+			awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+				config.WithRegion(c.config.GetRegion()))
+		}
 	}
 	if err != nil {
 		c.tracer.Scope().Counter(DriverName + ".failure.sqlconnector.newsession").Inc(1)
 		return nil, err
 	}
+	if athenaClient == nil {
+		clientMutext.Lock()
+		athenaClient := athena.NewFromConfig(awsConfig)
+		clients[cacheKey] = athenaClient
+		clientMutext.Unlock()
+	}
 
-	athenaAPI := athena.NewFromConfig(awsConfig)
 	timeConnect := time.Since(now)
 	conn := &Connection{
-		athenaAPI: athenaAPI,
+		athenaAPI: athenaClient,
 		connector: c,
 	}
 	c.tracer.Scope().Timer(DriverName + ".connector.connect").Record(timeConnect)
