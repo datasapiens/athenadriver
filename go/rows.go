@@ -26,6 +26,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -77,6 +78,7 @@ func NewNonOpsRows(ctx context.Context, athenaAPI *athena.Client, queryID string
 // NewRows is to create a new Rows.
 func NewRows(ctx context.Context, athenaAPI *athena.Client, queryID string, driverConfig *Config,
 	obs *DriverTracer) (*Rows, error) {
+	start := time.Now()
 	r := Rows{
 		athena:    athenaAPI,
 		ctx:       ctx,
@@ -89,6 +91,8 @@ func NewRows(ctx context.Context, athenaAPI *athena.Client, queryID string, driv
 		return nil, err
 	}
 	r.initColumnTypes()
+	elapsed := time.Since(start)
+	log.Println("New rows processing: ", elapsed)
 	return &r, nil
 }
 
