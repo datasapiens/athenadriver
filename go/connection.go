@@ -26,7 +26,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -231,7 +230,6 @@ func (c *Connection) getHeaderlessSingleRowResultPage(ctx context.Context, qid s
 // With QueryContext implemented, we don't need Queryer.
 // QueryerContext must honor the context timeout and return when the context is canceled.
 func (c *Connection) QueryContext(ctx context.Context, query string, namedArgs []driver.NamedValue) (driver.Rows, error) {
-	start := time.Now()
 	var obs = c.connector.tracer
 	var pseudoCommand = ""
 	if strings.HasPrefix(query, "pc:") {
@@ -448,8 +446,6 @@ WAITING_FOR_RESULT:
 		}
 	}
 
-	elapsed := time.Since(start)
-	log.Println("QueryContext processing: ", elapsed)
 	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs)
 }
 
