@@ -154,10 +154,12 @@ func (r *Rows) Next(dest []driver.Value) error {
 // fetchNextPage is to get next result set page with a specific token.
 func (r *Rows) fetchNextPage(token *string) error {
 	var err error
+
 	r.ResultOutput, err = r.athena.GetQueryResults(r.ctx,
 		&athena.GetQueryResultsInput{
 			QueryExecutionId: aws.String(r.queryID),
 			NextToken:        token,
+			MaxResults:       aws.Int32(MaxPageSize),
 		})
 	if err != nil {
 		r.tracer.Scope().Counter(DriverName + ".failure.fetchnextpage.getqueryresults").Inc(1)

@@ -112,3 +112,5 @@ const PCGetDriverVersion = "get_driver_version"
 
 // DriverVersion is athenadriver's version
 const DriverVersion = "1.1.14"
+
+const MaxPageSize = int32(1000)
