@@ -24,14 +24,14 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/athena"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/athena"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -297,30 +297,31 @@ func TestCheckNamedValue(t *testing.T) {
 
 func createTestConnection(t *testing.T) *Connection {
 	t.Parallel()
-	testConf := NewNoOpsConfig()
-	staticCredentials := credentials.NewStaticCredentials(testConf.GetAccessID(),
-		testConf.GetSecretAccessKey(),
-		testConf.GetSessionToken())
-	awsConfig := &aws.Config{
-		Region:      aws.String(testConf.GetRegion()),
-		Credentials: staticCredentials,
-	}
-	awsAthenaSession, err := session.NewSession(awsConfig)
-	assert.Nil(t, err)
-	athenaAPI := athena.New(awsAthenaSession)
 	c := &Connection{
-		athenaAPI: athenaAPI,
+		athenaAPI: createTestClient(t),
 		connector: NoopsSQLConnector(),
 	}
 	return c
 }
 
+func createTestClient(t *testing.T) *athena.Client {
+	testConf := NewNoOpsConfig()
+	staticCredentials := credentials.NewStaticCredentialsProvider(testConf.GetAccessID(),
+		testConf.GetSecretAccessKey(),
+		testConf.GetSessionToken())
+
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(testConf.GetRegion()),
+		config.WithCredentialsProvider(staticCredentials))
+
+	assert.Nil(t, err)
+	return athena.NewFromConfig(awsConfig)
+}
+
 func TestConnection_QueryContext2(t *testing.T) {
 	t.Parallel()
-	c := &Connection{
-		athenaAPI: newMockAthenaClient(),
-		connector: NoopsSQLConnector(),
-	}
+
+	c := createTestConnection(t)
 	driverRows, err := c.QueryContext(context.Background(), "StartQueryExecution_nil_error",
 		[]driver.NamedValue{})
 	assert.Nil(t, driverRows)
@@ -340,10 +341,7 @@ func TestConnection_QueryContext2(t *testing.T) {
 
 func TestConnection_QueryContext3(t *testing.T) {
 	t.Parallel()
-	c := &Connection{
-		athenaAPI: newMockAthenaClient(),
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()
@@ -370,10 +368,7 @@ func TestConnection_QueryContext4(t *testing.T) {
 	t.Parallel()
 	nm := newMockAthenaClient()
 	nm.GetWGStatus = true
-	c := &Connection{
-		athenaAPI: nm,
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()
@@ -403,10 +398,7 @@ func TestConnection_QueryContext5(t *testing.T) {
 	nm.GetWGStatus = true
 	nm.WGDisabled = true
 
-	c := &Connection{
-		athenaAPI: nm,
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()
@@ -429,11 +421,8 @@ func TestConnection_QueryContext5(t *testing.T) {
 
 func TestConnection_QueryContext6(t *testing.T) {
 	t.Parallel()
-	nm := newMockAthenaClient()
-	c := &Connection{
-		athenaAPI: nm,
-		connector: NoopsSQLConnector(),
-	}
+
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()
@@ -570,9 +559,22 @@ func BenchmarkConnection_QueryContext(b *testing.B) {
 
 func createConnectionFixture() *Connection {
 	rand.Seed(int64(time.Now().Nanosecond()))
+	testConf := NewNoOpsConfig()
+	staticCredentials := credentials.NewStaticCredentialsProvider(testConf.GetAccessID(),
+		testConf.GetSecretAccessKey(),
+		testConf.GetSessionToken())
+
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(testConf.GetRegion()),
+		config.WithCredentialsProvider(staticCredentials))
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	nm := newMockAthenaClient()
 	c := &Connection{
-		athenaAPI: nm,
+		athenaAPI: athena.NewFromConfig(awsConfig),
 		connector: NoopsSQLConnector(),
 	}
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
@@ -580,7 +582,7 @@ func createConnectionFixture() *Connection {
 	wgTags.AddTag("Uber Author", "henry.wu")
 	wgTags.AddTag("Uber Role", "Engineer")
 	wg := NewDefaultWG("henry_wu", nil, wgTags)
-	testConf := NewNoOpsConfig()
+	// testConf := NewNoOpsConfig()
 	_ = testConf.SetOutputBucket(s3bucket)
 	_ = testConf.SetRegion(regions[rand.Int31n(int32(len(regions)))])
 	testConf.SetUser("henry.wu")
@@ -594,11 +596,7 @@ func createConnectionFixture() *Connection {
 }
 
 func TestMoneyWise(t *testing.T) {
-	t.Parallel()
-	c := &Connection{
-		athenaAPI: newMockAthenaClient(),
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()
@@ -642,11 +640,7 @@ func TestMoneyWise(t *testing.T) {
 }
 
 func TestConnection_CachedQuery(t *testing.T) {
-	t.Parallel()
-	c := &Connection{
-		athenaAPI: newMockAthenaClient(),
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 	testConf := NewNoOpsConfig()
 	err := testConf.SetOutputBucket(s3bucket)
@@ -665,10 +659,7 @@ func TestConnection_CachedQuery(t *testing.T) {
 
 func Test_PseudoCommand(t *testing.T) {
 	t.Parallel()
-	c := &Connection{
-		athenaAPI: newMockAthenaClient(),
-		connector: NoopsSQLConnector(),
-	}
+	c := createTestConnection(t)
 	var s3bucket string = "s3://query-results-henry-wu-us-east-2/"
 
 	wgTags := NewWGTags()

@@ -77,8 +77,8 @@ const (
 	// DMLQueryTimeout is DML query timeout 30 minutes(unit second).
 	DMLQueryTimeout = 30 * 60
 
-	// PoolInterval is the interval between two status checks(unit second).
-	PoolInterval = 3
+	// PoolInterval is the interval between two status checks(unit miliseconds).
+	PoolInterval = 300
 
 	// The maximum allowed query string length is 262144 bytes,
 	// where the strings are encoded in UTF-8.
