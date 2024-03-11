@@ -122,19 +122,15 @@ func (r *Rows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	if len(r.ResultOutput.ResultSet.Rows) == 0 {
-		fmt.Println("fetching next page")
 		if r.ResultOutput.NextToken == nil || *r.ResultOutput.NextToken == "" {
 			// this means we reach the last page - no token and no rows
 			r.reachedLastPage = true
 			return io.EOF
 		}
 
-		start := time.Now()
 		if err := r.fetchNextPage(r.ResultOutput.NextToken); err != nil {
 			return err
 		}
-		elapsed := time.Since(start)
-		fmt.Println("Fetching page: ", elapsed)
 
 		if r.reachedLastPage {
 			return io.EOF
@@ -154,16 +150,11 @@ func (r *Rows) Next(dest []driver.Value) error {
 // fetchNextPage is to get next result set page with a specific token.
 func (r *Rows) fetchNextPage(token *string) error {
 	var err error
-
-	start := time.Now()
 	r.ResultOutput, err = r.athena.GetQueryResults(r.ctx,
 		&athena.GetQueryResultsInput{
 			QueryExecutionId: aws.String(r.queryID),
 			NextToken:        token,
-			MaxResults:       aws.Int32(MaxPageSize),
 		})
-	elapsed := time.Since(start)
-	fmt.Println("Fetching raw: ", elapsed)
 	if err != nil {
 		r.tracer.Scope().Counter(DriverName + ".failure.fetchnextpage.getqueryresults").Inc(1)
 		r.tracer.Log(ErrorLevel, "GetQueryResults failed", zap.String("error", err.Error()))
