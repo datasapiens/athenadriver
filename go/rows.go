@@ -155,12 +155,15 @@ func (r *Rows) Next(dest []driver.Value) error {
 func (r *Rows) fetchNextPage(token *string) error {
 	var err error
 
+	start := time.Now()
 	r.ResultOutput, err = r.athena.GetQueryResults(r.ctx,
 		&athena.GetQueryResultsInput{
 			QueryExecutionId: aws.String(r.queryID),
 			NextToken:        token,
 			MaxResults:       aws.Int32(MaxPageSize),
 		})
+	elapsed := time.Since(start)
+	fmt.Println("Fetching raw: ", elapsed)
 	if err != nil {
 		r.tracer.Scope().Counter(DriverName + ".failure.fetchnextpage.getqueryresults").Inc(1)
 		r.tracer.Log(ErrorLevel, "GetQueryResults failed", zap.String("error", err.Error()))
