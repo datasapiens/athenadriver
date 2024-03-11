@@ -122,15 +122,20 @@ func (r *Rows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 	if len(r.ResultOutput.ResultSet.Rows) == 0 {
+		fmt.Println("fetching next page")
 		if r.ResultOutput.NextToken == nil || *r.ResultOutput.NextToken == "" {
 			// this means we reach the last page - no token and no rows
 			r.reachedLastPage = true
 			return io.EOF
 		}
 
+		start := time.Now()
 		if err := r.fetchNextPage(r.ResultOutput.NextToken); err != nil {
 			return err
 		}
+		elapsed := time.Since(start)
+		fmt.Println("Fetching page: ", elapsed)
+
 		if r.reachedLastPage {
 			return io.EOF
 		}
