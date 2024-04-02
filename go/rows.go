@@ -58,8 +58,7 @@ type Rows struct {
 	tracer          *DriverTracer
 	pageCount       int64
 	columnType      []reflect.Type
-	cost            string
-	addCost         bool
+	cost            *string
 }
 
 // NewNonOpsRows is to create a new Rows.
@@ -78,7 +77,7 @@ func NewNonOpsRows(ctx context.Context, athenaAPI *athena.Client, queryID string
 
 // NewRows is to create a new Rows.
 func NewRows(ctx context.Context, athenaAPI *athena.Client, queryID string, driverConfig *Config,
-	obs *DriverTracer, cost string) (*Rows, error) {
+	obs *DriverTracer, cost *string) (*Rows, error) {
 	r := Rows{
 		athena:    athenaAPI,
 		ctx:       ctx,
@@ -87,7 +86,6 @@ func NewRows(ctx context.Context, athenaAPI *athena.Client, queryID string, driv
 		tracer:    obs,
 		pageCount: -1,
 		cost:      cost,
-		addCost:   cost != "",
 	}
 	if err := r.fetchNextPage(nil); err != nil {
 		return nil, err
@@ -126,12 +124,9 @@ func (r *Rows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
-	if r.addCost {
-		if dest == nil {
-			dest = make([]driver.Value, 1)
-		}
-		dest[0] = r.cost
-		r.addCost = false
+	if r.cost != nil && len(dest) > 0 {
+		dest[0] = *r.cost
+		r.cost = nil
 		return nil
 	}
 

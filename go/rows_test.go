@@ -61,7 +61,7 @@ func TestOnePageSuccess(t *testing.T) {
 	}
 	for _, test := range tests {
 		r, _ := NewRows(context.Background(), createTestClient(t),
-			test.queryID, testConf, NewDefaultObservability(testConf), "")
+			test.queryID, testConf, NewDefaultObservability(testConf), nil)
 
 		var testArray, firstName, lastName string
 		var active bool
@@ -106,7 +106,7 @@ func TestNextFailure(t *testing.T) {
 	for _, test := range tests {
 		r, _ := NewRows(context.Background(), createTestClient(t),
 			test.queryID,
-			testConf, NewDefaultObservability(testConf), "")
+			testConf, NewDefaultObservability(testConf), nil)
 
 		var testArray, firstName, lastName string
 		var active bool
@@ -151,7 +151,7 @@ func TestMultiplePages(t *testing.T) {
 	for _, test := range tests {
 		r, _ = NewRows(context.Background(), createTestClient(t),
 			test.queryID,
-			testConf, NewDefaultObservability(testConf), "")
+			testConf, NewDefaultObservability(testConf), nil)
 
 		var testArray, firstName, lastName string
 		var active bool
@@ -198,7 +198,7 @@ func TestRows_Columns(t *testing.T) {
 	for _, test := range tests {
 		r, _ := NewRows(context.Background(), createTestClient(t),
 			test.queryID,
-			testConf, NewDefaultObservability(testConf), "")
+			testConf, NewDefaultObservability(testConf), nil)
 		assert.Equal(t, len(r.Columns()), len(cs))
 	}
 }
@@ -222,7 +222,7 @@ func TestRows_ColumnTypeDatabaseTypeName(t *testing.T) {
 	for _, test := range tests {
 		r, _ := NewRows(context.Background(), createTestClient(t),
 			test.queryID,
-			testConf, NewDefaultObservability(testConf), "")
+			testConf, NewDefaultObservability(testConf), nil)
 		for i, v := range cs {
 			assert.Equal(t, r.ColumnTypeDatabaseTypeName(i), *v.Type)
 
@@ -249,7 +249,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 	for _, test := range tests {
 		r, _ := NewRows(context.Background(), createTestClient(t),
 			test.queryID,
-			testConf, NewDefaultObservability(testConf), "")
+			testConf, NewDefaultObservability(testConf), nil)
 		for _, v := range []string{"tinyint", "smallint", "integer", "bigint"} {
 			assert.Equal(t, r.getDefaultValueForColumnType(v), 0)
 		}
@@ -273,7 +273,7 @@ func TestRows_GetDefaultValueForColumnType(t *testing.T) {
 func TestRows_AthenaTypeToGoType(t *testing.T) {
 	testConf := NewNoOpsConfig()
 	r, _ := NewRows(context.Background(), createTestClient(t),
-		"SELECT_OK", testConf, NewDefaultObservability(testConf), "")
+		"SELECT_OK", testConf, NewDefaultObservability(testConf), nil)
 	c := newColumnInfo("a", "tinyint")
 	// tinyint
 	rv := "1"
@@ -449,7 +449,7 @@ func TestRows_AthenaTypeToGoType(t *testing.T) {
 func TestRows_ColumnTypeDatabaseTypeName2(t *testing.T) {
 	testConf := NewNoOpsConfig()
 	r, _ := NewRows(context.Background(), createTestClient(t),
-		"SELECT_OK", testConf, NewDefaultObservability(testConf), "")
+		"SELECT_OK", testConf, NewDefaultObservability(testConf), nil)
 	c := newColumnInfo("a", nil)
 	getQueryResultsOutput := &athena.GetQueryResultsOutput{
 		ResultSet: &types.ResultSet{
@@ -468,39 +468,39 @@ func TestRows_NewRows(t *testing.T) {
 	testConf := NewNoOpsConfig()
 	r, e := NewRows(context.Background(), createTestClient(t),
 		"1coloumn0row",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"1coloumn0row_valid",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.Equal(t, *r.ResultOutput.ResultSet.Rows[0].Data[0].VarCharValue,
 		"1024")
 
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"column_more_than_row_fields",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"row_fields_more_than_column",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"GetQueryResultsWithContext_return_error",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.NotNil(t, e)
 	assert.Nil(t, r)
 
 	// rawValue is nil
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"missing_data_resp",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	var dest []driver.Value = make([]driver.Value, 8)
@@ -512,7 +512,7 @@ func TestRows_NewRows(t *testing.T) {
 	testConf.SetMissingAsDefault(false)
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"missing_data_resp",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	e = r.Next(dest)
@@ -520,7 +520,7 @@ func TestRows_NewRows(t *testing.T) {
 
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"missing_data_resp2",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	e = r.Next(dest)
@@ -529,7 +529,7 @@ func TestRows_NewRows(t *testing.T) {
 	// error when row.Next()
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"SELECT_GetQueryResults_ERR",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	for {
@@ -543,7 +543,7 @@ func TestRows_NewRows(t *testing.T) {
 	// missing row in page
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"SELECT_EMPTY_ROW_IN_PAGE",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	for {
@@ -557,7 +557,7 @@ func TestRows_NewRows(t *testing.T) {
 	// close in the loop
 	r, e = NewRows(context.Background(), createTestClient(t),
 		"SELECT_GetQueryResults_ERR",
-		testConf, NewDefaultObservability(testConf), "")
+		testConf, NewDefaultObservability(testConf), nil)
 	assert.Nil(t, e)
 	assert.NotNil(t, r)
 	cnt := 0

@@ -190,10 +190,10 @@ func (c *Connection) ExecContext(ctx context.Context, query string, namedArgs []
 }
 
 func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, error) {
-	var cost string
+	var cost *string
 	if c.connector.config.IsMoneyWise() {
 		dataScanned := int64(0)
-		cost = printCost(&athena.GetQueryExecutionOutput{
+		c := printCost(&athena.GetQueryExecutionOutput{
 			QueryExecution: &types.QueryExecution{
 				QueryExecutionId: &QID,
 				Statistics: &types.QueryExecutionStatistics{
@@ -201,6 +201,7 @@ func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, 
 				},
 			},
 		})
+		cost = &c
 	}
 	wg := c.connector.config.GetWorkgroup()
 	if wg.Name == "" {
@@ -448,7 +449,12 @@ WAITING_FOR_RESULT:
 		}
 	}
 
-	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs, cost)
+	var queryCost *string
+	if cost != "" {
+		queryCost = &cost
+	}
+
+	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs, queryCost)
 }
 
 // Ping implements driver.Pinger interface.
