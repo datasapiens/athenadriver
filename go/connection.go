@@ -190,9 +190,10 @@ func (c *Connection) ExecContext(ctx context.Context, query string, namedArgs []
 }
 
 func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, error) {
+	var cost string
 	if c.connector.config.IsMoneyWise() {
 		dataScanned := int64(0)
-		printCost(&athena.GetQueryExecutionOutput{
+		cost = printCost(&athena.GetQueryExecutionOutput{
 			QueryExecution: &types.QueryExecution{
 				QueryExecutionId: &QID,
 				Statistics: &types.QueryExecutionStatistics{
@@ -205,7 +206,7 @@ func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, 
 	if wg.Name == "" {
 		wg.Name = DefaultWGName
 	}
-	return NewRows(ctx, c.athenaAPI, QID, c.connector.config, c.connector.tracer)
+	return NewRows(ctx, c.athenaAPI, QID, c.connector.config, c.connector.tracer, cost)
 }
 
 func (c *Connection) getHeaderlessSingleRowResultPage(ctx context.Context, qid string) (driver.Rows, error) {
@@ -232,6 +233,7 @@ func (c *Connection) getHeaderlessSingleRowResultPage(ctx context.Context, qid s
 func (c *Connection) QueryContext(ctx context.Context, query string, namedArgs []driver.NamedValue) (driver.Rows, error) {
 	var obs = c.connector.tracer
 	var pseudoCommand = ""
+	var cost string
 	if strings.HasPrefix(query, "pc:") {
 		query = strings.Trim(query[3:], " ")
 		if pseudoCommand = PCGetQID; strings.HasPrefix(query, pseudoCommand+" ") {
@@ -385,7 +387,7 @@ WAITING_FOR_RESULT:
 				zap.String("queryID", queryID))
 			obs.Scope().Timer(DriverName + ".query.canceled").Record(timeCanceled)
 			if c.connector.config.IsMoneyWise() {
-				printCost(statusResp)
+				cost = printCost(statusResp)
 			}
 			return nil, context.Canceled
 		case types.QueryExecutionStateFailed:
@@ -399,7 +401,7 @@ WAITING_FOR_RESULT:
 			return nil, errors.New(reason)
 		case types.QueryExecutionStateSucceeded:
 			if c.connector.config.IsMoneyWise() {
-				printCost(statusResp)
+				cost = printCost(statusResp)
 			}
 			timeQueryExecutionStateSucceeded := time.Since(now)
 			obs.Scope().Timer(DriverName + ".query.queryexecutionstatesucceeded").Record(timeQueryExecutionStateSucceeded)
@@ -426,7 +428,7 @@ WAITING_FOR_RESULT:
 				statusRespFinal, _ := c.athenaAPI.GetQueryExecution(context.Background(), &athena.GetQueryExecutionInput{
 					QueryExecutionId: aws.String(queryID),
 				})
-				printCost(statusRespFinal)
+				cost = printCost(statusRespFinal)
 			}
 			obs.Scope().Counter(DriverName + ".failure.querycontext.stopqueryexecution.succeeded").Inc(1)
 			timeStopQueryExecution := time.Since(now)
@@ -446,7 +448,7 @@ WAITING_FOR_RESULT:
 		}
 	}
 
-	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs)
+	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs, cost)
 }
 
 // Ping implements driver.Pinger interface.
