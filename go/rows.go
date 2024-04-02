@@ -130,7 +130,7 @@ func (r *Rows) Next(dest []driver.Value) error {
 		if dest == nil {
 			dest = make([]driver.Value, 1)
 		}
-		dest[1] = r.cost
+		dest[0] = r.cost
 		r.addCost = false
 		return nil
 	}
