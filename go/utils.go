@@ -726,20 +726,20 @@ func printCost(o *athena.GetQueryExecutionOutput) string {
 
 	var cost string
 	if o == nil || o.QueryExecution == nil || o.QueryExecution.Statistics == nil {
-		cost = fmt.Sprintln("query cost: 0.0 USD, scanned data: 0 B, qid: NA")
+		cost = "cost: 0.0 USD, dataScanned: 0 B, qid: NA"
 	} else {
 		dataScannedBytes := o.QueryExecution.Statistics.DataScannedInBytes
 		if dataScannedBytes == nil {
-			cost = fmt.Sprintln("query cost: 0.0 USD, scanned data: 0 B, qid: NA")
+			cost = "cost: 0.0 USD, dataScanned: 0 B, qid: NA"
 		} else if *dataScannedBytes == 0 {
-			cost = fmt.Sprintln("query cost: 0.0 USD, scanned data: 0 B, qid: " + *o.QueryExecution.QueryExecutionId)
+			cost = fmt.Sprint("cost: 0.0 USD, dataScanned: 0 B, qid: " + *o.QueryExecution.QueryExecutionId)
 		} else if *dataScannedBytes < 10*1024*1024 {
-			cost = fmt.Sprintf("query cost: %.20f USD, scanned data: %d B, qid: %s\n",
+			cost = fmt.Sprintf("cost: %.20f USD,dataScanned: %d B, qid: %s",
 				getCost(*dataScannedBytes),
 				*dataScannedBytes,
 				*o.QueryExecution.QueryExecutionId)
 		} else {
-			cost = fmt.Sprintf("query cost: %.20f USD, scanned data: %d B, qid: %s\n",
+			cost = fmt.Sprintf("cost: %.20f USD, dataScanned: %d B, qid: %s",
 				getCost(*dataScannedBytes),
 				*dataScannedBytes,
 				*o.QueryExecution.QueryExecutionId)
