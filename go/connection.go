@@ -190,10 +190,10 @@ func (c *Connection) ExecContext(ctx context.Context, query string, namedArgs []
 }
 
 func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, error) {
-	var cost *string
+	var statitics *QueryStatsNil
 	if c.connector.config.IsMoneyWise() {
 		dataScanned := int64(0)
-		c := printCost(&athena.GetQueryExecutionOutput{
+		statitics = printCost(&athena.GetQueryExecutionOutput{
 			QueryExecution: &types.QueryExecution{
 				QueryExecutionId: &QID,
 				Statistics: &types.QueryExecutionStatistics{
@@ -201,13 +201,12 @@ func (c *Connection) cachedQuery(ctx context.Context, QID string) (driver.Rows, 
 				},
 			},
 		})
-		cost = &c
 	}
 	wg := c.connector.config.GetWorkgroup()
 	if wg.Name == "" {
 		wg.Name = DefaultWGName
 	}
-	return NewRows(ctx, c.athenaAPI, QID, c.connector.config, c.connector.tracer, cost)
+	return NewRows(ctx, c.athenaAPI, QID, c.connector.config, c.connector.tracer, statitics)
 }
 
 func (c *Connection) getHeaderlessSingleRowResultPage(ctx context.Context, qid string) (driver.Rows, error) {
@@ -234,7 +233,7 @@ func (c *Connection) getHeaderlessSingleRowResultPage(ctx context.Context, qid s
 func (c *Connection) QueryContext(ctx context.Context, query string, namedArgs []driver.NamedValue) (driver.Rows, error) {
 	var obs = c.connector.tracer
 	var pseudoCommand = ""
-	var cost string
+	var statitics *QueryStatsNil
 	if strings.HasPrefix(query, "pc:") {
 		query = strings.Trim(query[3:], " ")
 		if pseudoCommand = PCGetQID; strings.HasPrefix(query, pseudoCommand+" ") {
@@ -388,7 +387,7 @@ WAITING_FOR_RESULT:
 				zap.String("queryID", queryID))
 			obs.Scope().Timer(DriverName + ".query.canceled").Record(timeCanceled)
 			if c.connector.config.IsMoneyWise() {
-				cost = printCost(statusResp)
+				statitics = printCost(statusResp)
 			}
 			return nil, context.Canceled
 		case types.QueryExecutionStateFailed:
@@ -402,7 +401,7 @@ WAITING_FOR_RESULT:
 			return nil, errors.New(reason)
 		case types.QueryExecutionStateSucceeded:
 			if c.connector.config.IsMoneyWise() {
-				cost = printCost(statusResp)
+				statitics = printCost(statusResp)
 			}
 			timeQueryExecutionStateSucceeded := time.Since(now)
 			obs.Scope().Timer(DriverName + ".query.queryexecutionstatesucceeded").Record(timeQueryExecutionStateSucceeded)
@@ -429,7 +428,7 @@ WAITING_FOR_RESULT:
 				statusRespFinal, _ := c.athenaAPI.GetQueryExecution(context.Background(), &athena.GetQueryExecutionInput{
 					QueryExecutionId: aws.String(queryID),
 				})
-				cost = printCost(statusRespFinal)
+				statitics = printCost(statusRespFinal)
 			}
 			obs.Scope().Counter(DriverName + ".failure.querycontext.stopqueryexecution.succeeded").Inc(1)
 			timeStopQueryExecution := time.Since(now)
@@ -449,12 +448,7 @@ WAITING_FOR_RESULT:
 		}
 	}
 
-	var queryCost *string
-	if cost != "" {
-		queryCost = &cost
-	}
-
-	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs, queryCost)
+	return NewRows(ctx, c.athenaAPI, queryID, c.connector.config, obs, statitics)
 }
 
 // Ping implements driver.Pinger interface.

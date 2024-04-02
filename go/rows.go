@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
@@ -58,7 +59,7 @@ type Rows struct {
 	tracer          *DriverTracer
 	pageCount       int64
 	columnType      []reflect.Type
-	cost            *string
+	statistics      *QueryStatsNil
 }
 
 // NewNonOpsRows is to create a new Rows.
@@ -77,15 +78,15 @@ func NewNonOpsRows(ctx context.Context, athenaAPI *athena.Client, queryID string
 
 // NewRows is to create a new Rows.
 func NewRows(ctx context.Context, athenaAPI *athena.Client, queryID string, driverConfig *Config,
-	obs *DriverTracer, cost *string) (*Rows, error) {
+	obs *DriverTracer, statistics *QueryStatsNil) (*Rows, error) {
 	r := Rows{
-		athena:    athenaAPI,
-		ctx:       ctx,
-		queryID:   queryID,
-		config:    driverConfig,
-		tracer:    obs,
-		pageCount: -1,
-		cost:      cost,
+		athena:     athenaAPI,
+		ctx:        ctx,
+		queryID:    queryID,
+		config:     driverConfig,
+		tracer:     obs,
+		pageCount:  -1,
+		statistics: statistics,
 	}
 	if err := r.fetchNextPage(nil); err != nil {
 		return nil, err
@@ -124,9 +125,9 @@ func (r *Rows) Next(dest []driver.Value) error {
 		return io.EOF
 	}
 
-	if r.cost != nil && len(dest) > 0 {
-		dest[0] = *r.cost
-		r.cost = nil
+	if r.statistics != nil && len(dest) > 0 {
+		dest[0] = *r.statistics
+		r.statistics = nil
 		return nil
 	}
 
@@ -474,5 +475,48 @@ func (s *NullSliceAny) Scan(value interface{}) error {
 	}
 	s.SliceAny = val
 	s.Valid = true
+	return nil
+}
+
+type QueryStatsNil struct {
+	BytesScanned int64
+	Cost         float64
+	QID          string
+	Valid        bool
+}
+
+func (s *QueryStatsNil) Scan(value interface{}) error {
+	if value == nil {
+		s.Valid = false
+		return nil
+	}
+
+	var src []byte
+	switch t := value.(type) {
+	case string:
+		src = []byte(t)
+	case []byte:
+		src = t
+	case QueryStatsNil:
+		*s = t
+		s.Valid = true
+		return nil
+	}
+
+	if src == nil {
+		s.Valid = false
+		return nil
+	}
+
+	if err := json.Unmarshal(src, s); err != nil {
+		s.Valid = false
+		s.BytesScanned = 0
+		s.Cost = 0
+		s.Cost = 0
+		return err
+	} else {
+		s.Valid = true
+	}
+
 	return nil
 }
