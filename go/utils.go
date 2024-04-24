@@ -722,27 +722,33 @@ func GetFromEnvVal(keys []string) string {
 // printCost is to print query cost
 // https://aws.amazon.com/athena/pricing/
 // getCost of 10MB: 5 / (1024. * 1024.) * 10 = 4.76837158203125e-05
-func printCost(o *athena.GetQueryExecutionOutput) {
+func printCost(o *athena.GetQueryExecutionOutput) *QueryStatsNil {
+
+	var qs QueryStatsNil
 	if o == nil || o.QueryExecution == nil || o.QueryExecution.Statistics == nil {
-		println("query cost: 0.0 USD, scanned data: 0 B, qid: NA")
-		return
-	}
-	dataScannedBytes := o.QueryExecution.Statistics.DataScannedInBytes
-	if dataScannedBytes == nil {
-		println("query cost: 0.0 USD, scanned data: 0 B, qid: NA")
-	} else if *dataScannedBytes == 0 {
-		println("query cost: 0.0 USD, scanned data: 0 B, qid: " + *o.QueryExecution.QueryExecutionId)
-	} else if *dataScannedBytes < 10*1024*1024 {
-		fmt.Printf("query cost: %.20f USD, scanned data: %d B, qid: %s\n",
-			getCost(*dataScannedBytes),
-			*dataScannedBytes,
-			*o.QueryExecution.QueryExecutionId)
+		qs = QueryStatsNil{
+			QID: "NA",
+		}
 	} else {
-		fmt.Printf("query cost: %.20f USD, scanned data: %d B, qid: %s\n",
-			getCost(*dataScannedBytes),
-			*dataScannedBytes,
-			*o.QueryExecution.QueryExecutionId)
+		dataScannedBytes := o.QueryExecution.Statistics.DataScannedInBytes
+		if dataScannedBytes == nil {
+			qs = QueryStatsNil{
+				QID: "NA",
+			}
+		} else if *dataScannedBytes == 0 {
+			qs = QueryStatsNil{
+				QID: *o.QueryExecution.QueryExecutionId,
+			}
+		} else {
+			qs = QueryStatsNil{
+				Cost:         getCost(*dataScannedBytes),
+				BytesScanned: *dataScannedBytes,
+				QID:          *o.QueryExecution.QueryExecutionId,
+			}
+		}
 	}
+
+	return &qs
 }
 
 // getCost is return the USD cost upon data scanned in Bytes
