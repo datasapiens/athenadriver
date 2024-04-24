@@ -21,6 +21,7 @@
 package athenadriver
 
 import (
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
@@ -220,7 +221,10 @@ func (c *Config) SetWorkGroup(w *Workgroup) error {
 	if w.Config == nil {
 		w.Config = GetDefaultWGConfig()
 	}
-	c.values.Set("workgroupConfig", w.Config.String())
+
+	// TO DO
+	// w.Config.String() is not available in sdk v2
+	c.values.Set("workgroupConfig", fmt.Sprintf("%+v", w.Config))
 	return nil
 }
 
