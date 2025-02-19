@@ -357,12 +357,10 @@ func (r *Rows) athenaTypeToGoType(columnInfo *types.ColumnInfo, rawValue *string
 		return val, nil
 
 	case "map":
-		fmt.Println("!!!!!!!!!!!!!!!!!! map:", val)
-		var m map[string]interface{}
-
 		// parse string in format of { key=value, key=value, ... } into map
 		val = strings.Trim(val, "{}")
 		pairs := strings.Split(val, ",")
+		m := make(map[string]interface{})
 		for _, pair := range pairs {
 			kv := strings.SplitN(pair, "=", 2)
 			if len(kv) == 2 {
