@@ -353,8 +353,21 @@ func (r *Rows) athenaTypeToGoType(columnInfo *types.ColumnInfo, rawValue *string
 	// we assume the json syntax is correct. Leave to caller to verify it.
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "map", "unknown":
+		"ipaddress", "unknown":
 		return val, nil
+
+	case "map":
+		fmt.Println("!!!!!!!!!!!!!!!!!! map:", val)
+		iter := jcf.BorrowIterator([]byte(val))
+		defer jcf.ReturnIterator(iter)
+		var m map[string]interface{}
+		iter.ReadVal(&m)
+		if iter.Error != nil {
+			return map[string]interface{}{"value": val}, nil
+		} else {
+			return m, nil
+		}
+
 	case "boolean":
 		if val == "true" {
 			return true, nil
@@ -444,8 +457,10 @@ func (r *Rows) getScanType(athenaType string) reflect.Type {
 		v = sql.NullTime{}
 	case "json", "char", "varchar", "varbinary", "row", "string", "binary",
 		"struct", "interval year to month", "interval day to second", "decimal",
-		"ipaddress", "map", "unknown":
+		"ipaddress", "unknown":
 		v = sql.NullString{}
+	case "map":
+		v = NullMapAny{}
 	case "array":
 		v = NullSliceAny{}
 	default:
@@ -474,6 +489,27 @@ func (s *NullSliceAny) Scan(value interface{}) error {
 		return fmt.Errorf("athena: cannot convert %v (%T) to []any", value, value)
 	}
 	s.SliceAny = val
+	s.Valid = true
+	return nil
+}
+
+// NullMapAny represents a map of any that may be null.
+type NullMapAny struct {
+	MapAny map[string]interface{}
+	Valid  bool
+}
+
+// Scan implements the sql.Scanner interface.
+func (s *NullMapAny) Scan(value interface{}) error {
+	if value == nil {
+		s.MapAny, s.Valid = map[string]interface{}{}, false
+		return nil
+	}
+	val, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("athena: cannot convert %v (%T) to map[string]interface{}", value, value)
+	}
+	s.MapAny = val
 	s.Valid = true
 	return nil
 }
