@@ -358,15 +358,20 @@ func (r *Rows) athenaTypeToGoType(columnInfo *types.ColumnInfo, rawValue *string
 
 	case "map":
 		fmt.Println("!!!!!!!!!!!!!!!!!! map:", val)
-		iter := jcf.BorrowIterator([]byte(val))
-		defer jcf.ReturnIterator(iter)
 		var m map[string]interface{}
-		iter.ReadVal(&m)
-		if iter.Error != nil {
-			return map[string]interface{}{"value": val}, nil
-		} else {
-			return m, nil
+
+		// parse string in format of { key=value, key=value, ... } into map
+		val = strings.Trim(val, "{}")
+		pairs := strings.Split(val, ",")
+		for _, pair := range pairs {
+			kv := strings.SplitN(pair, "=", 2)
+			if len(kv) == 2 {
+				key := strings.TrimSpace(kv[0])
+				value := strings.TrimSpace(kv[1])
+				m[key] = value
+			}
 		}
+		return m, nil
 
 	case "boolean":
 		if val == "true" {
